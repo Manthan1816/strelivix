@@ -27,7 +27,7 @@
     body {
       background-color: var(--bg);
       color: var(--text);
-      font-family: 'Outfit', sans-serif;
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
       min-height: 100vh;
       display: flex;
       justify-content: center;
@@ -443,6 +443,10 @@
       border-radius: 10px;
       padding: 10px 12px;
       margin-bottom: 8px;
+      transition: all 0.2s ease;
+    }
+    .log-item:hover {
+      border-color: var(--accent);
     }
 
     .log-header {
@@ -546,7 +550,7 @@
           <div class="file-preview-list" id="previewContainer"></div>
         </div>
 
-        <label style="margin-top: 6px;">Day's Saved Entries</label>
+        <label style="margin-top: 6px;">Day's Saved Entries (Click to View)</label>
         <div class="left-logs-drawer" id="logsContainer">
           <div class="empty-state">No entries logged for this date.</div>
         </div>
@@ -567,7 +571,6 @@
     </div>
   </div>
 
-  <!-- Defensive Module Script: Guarantees no null-reference crashes -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
     import { 
@@ -597,14 +600,9 @@
       measurementId: "G-RBERNEFGP7"
     };
 
-    let app, auth, db;
-    try {
-      app = initializeApp(firebaseConfig);
-      auth = getAuth(app);
-      db = getFirestore(app);
-    } catch (e) {
-      console.error("Firebase init:", e);
-    }
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
 
     let currentUser = null;
     let isRegisterMode = false;
@@ -612,207 +610,11 @@
     let currentDate = new Date();
     let pendingFiles = [];
 
-    // Safe Event Binder
-    const bindEvent = (id, event, handler) => {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener(event, handler);
-    };
-
-    // Auth Elements
-    const authOverlay = document.getElementById("authOverlay");
-    const authTitle = document.getElementById("authCardTitle");
-    const authBtn = document.getElementById("authSubmitBtn");
-    const authSwitch = document.getElementById("authSwitchBtn");
-    const userEmailDisplay = document.getElementById("userEmailDisplay");
-
-    bindEvent("authSwitchBtn", "click", () => {
-      isRegisterMode = !isRegisterMode;
-      if (authTitle) authTitle.textContent = isRegisterMode ? "Create Account" : "Welcome Back";
-      if (authBtn) authBtn.textContent = isRegisterMode ? "Sign Up" : "Log In";
-      if (authSwitch) {
-        authSwitch.innerHTML = isRegisterMode 
-          ? "Have an account? <span>Log In</span>" 
-          : "Don't have an account? <span>Sign Up</span>";
-      }
-    });
-
-    bindEvent("authSubmitBtn", "click", async () => {
-      const email = document.getElementById("authEmail")?.value?.trim();
-      const pass = document.getElementById("authPassword")?.value?.trim();
-      if (!email || !pass) return alert("Please enter both email and password.");
-
-      try {
-        if (isRegisterMode) {
-          await createUserWithEmailAndPassword(auth, email, pass);
-        } else {
-          await signInWithEmailAndPassword(auth, email, pass);
-        }
-      } catch (err) {
-        alert(err.message);
-      }
-    });
-
-    bindEvent("logoutBtn", "click", () => {
-      if (auth) signOut(auth);
-    });
-
-    if (auth) {
-      onAuthStateChanged(auth, (user) => {
-        currentUser = user;
-        if (user) {
-          if (authOverlay) authOverlay.style.display = "none";
-          if (userEmailDisplay) userEmailDisplay.textContent = user.email;
-          attachRealtimeListeners();
-        } else {
-          if (authOverlay) authOverlay.style.display = "flex";
-          if (userEmailDisplay) userEmailDisplay.textContent = "Offline";
-        }
-      });
-    }
-
-    let unsubscribeSnap = null;
-    function attachRealtimeListeners() {
-      if (!currentUser || !db) return;
-      renderCalendar();
-
-      if (unsubscribeSnap) unsubscribeSnap();
-
-      try {
-        const userEntriesRef = collection(db, "users", currentUser.uid, "entries");
-        unsubscribeSnap = onSnapshot(userEntriesRef, (snapshot) => {
-          const allEntries = [];
-          snapshot.forEach(d => allEntries.push({ id: d.id, ...d.data() }));
-
-          markCalendarEntries(allEntries);
-          renderCurrentDayLogs(allEntries);
-        }, (err) => {
-          console.warn("Firestore snapshot:", err);
-        });
-      } catch (err) {
-        console.error("Listener error:", err);
-      }
-    }
-
-    function renderCurrentDayLogs(allEntries) {
-      const logsContainer = document.getElementById("logsContainer");
-      if (!logsContainer) return;
-      const currentDayEntries = allEntries.filter(e => e.date === selectedDateStr);
-      logsContainer.innerHTML = "";
-
-      if (currentDayEntries.length === 0) {
-        logsContainer.innerHTML = `<div class="empty-state">No entries for this date.</div>`;
-        return;
-      }
-
-      currentDayEntries.forEach(item => {
-        const div = document.createElement("div");
-        div.className = "log-item";
-
-        let attachmentsHtml = "";
-        if (item.files && item.files.length > 0) {
-          attachmentsHtml = `<div class="file-preview-list" style="margin-top: 4px;">` +
-            item.files.map(f => `
-              <div class="file-chip">
-                <a href="${f.data}" download="${f.name}">📎 ${f.name}</a>
-              </div>
-            `).join("") + `</div>`;
-        }
-
-        div.innerHTML = `
-          <div class="log-header">
-            <div class="log-title">${item.title}</div>
-            <button class="btn-delete-pill" onclick="window.deleteEntry('${item.id}')">✕</button>
-          </div>
-          ${attachmentsHtml}
-        `;
-        logsContainer.appendChild(div);
-      });
-    }
-
-    window.deleteEntry = async (docId) => {
-      if (!currentUser || !db) return;
-      await deleteDoc(doc(db, "users", currentUser.uid, "entries", docId));
-    };
-
-    bindEvent("saveBtn", "click", async () => {
-      if (!currentUser) return alert("Please log in first.");
-
-      const titleInput = document.getElementById("taskName");
-      const notesInput = document.getElementById("taskNotes");
-      const title = titleInput?.value?.trim();
-      const notes = notesInput?.value?.trim() || "";
-
-      if (!title) return alert("Please enter a title.");
-
-      const saveBtn = document.getElementById("saveBtn");
-      if (saveBtn) {
-        saveBtn.textContent = "Saving...";
-        saveBtn.disabled = true;
-      }
-
-      try {
-        await addDoc(collection(db, "users", currentUser.uid, "entries"), {
-          date: selectedDateStr,
-          title,
-          notes,
-          files: pendingFiles,
-          timestamp: Date.now()
-        });
-
-        if (titleInput) titleInput.value = "";
-        if (notesInput) notesInput.value = "";
-        pendingFiles = [];
-        renderFilePreviews();
-      } catch (err) {
-        alert("Error saving: " + err.message);
-      } finally {
-        if (saveBtn) {
-          saveBtn.textContent = "✓ Save Entry";
-          saveBtn.disabled = false;
-        }
-      }
-    });
-
-    bindEvent("fileInput", "change", (e) => {
-      const files = Array.from(e.target.files || []);
-      files.forEach(file => {
-        if (file.size > 800 * 1024) {
-          alert(`"${file.name}" is over 800KB. Keep files small for free storage.`);
-          return;
-        }
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          pendingFiles.push({
-            name: file.name,
-            data: event.target.result
-          });
-          renderFilePreviews();
-        };
-        reader.readAsDataURL(file);
-      });
-    });
-
-    function renderFilePreviews() {
-      const previewContainer = document.getElementById("previewContainer");
-      if (!previewContainer) return;
-      previewContainer.innerHTML = "";
-      pendingFiles.forEach((file, idx) => {
-        const span = document.createElement("div");
-        span.className = "file-chip";
-        span.innerHTML = `<span>📎 ${file.name}</span><span class="remove-btn" onclick="removePendingFile(${idx})">✕</span>`;
-        previewContainer.appendChild(span);
-      });
-    }
-
-    window.removePendingFile = (idx) => {
-      pendingFiles.splice(idx, 1);
-      renderFilePreviews();
-    };
-
     function renderCalendar() {
       const year = currentDate.getFullYear();
       const month = currentDate.getMonth();
       const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      
       const label = document.getElementById("monthYearLabel");
       if (label) label.textContent = `${monthNames[month]} ${year}`;
 
@@ -846,6 +648,15 @@
           selectedDateStr = dateKey;
           const viewHeading = document.getElementById("viewHeading");
           if (viewHeading) viewHeading.textContent = `Summary & Notes (${selectedDateStr})`;
+          
+          // Clear inputs for clean new entry on day switch
+          const taskName = document.getElementById("taskName");
+          const taskNotes = document.getElementById("taskNotes");
+          if (taskName) taskName.value = "";
+          if (taskNotes) taskNotes.value = "";
+          pendingFiles = [];
+          renderFilePreviews();
+
           renderCalendar();
           if (currentUser) attachRealtimeListeners();
         });
@@ -865,19 +676,234 @@
       });
     }
 
-    bindEvent("prevMonthBtn", "click", () => {
-      currentDate.setMonth(currentDate.getMonth() - 1);
-      renderCalendar();
-      if (currentUser) attachRealtimeListeners();
-    });
-
-    bindEvent("nextMonthBtn", "click", () => {
-      currentDate.setMonth(currentDate.getMonth() + 1);
-      renderCalendar();
-      if (currentUser) attachRealtimeListeners();
-    });
-
     renderCalendar();
+
+    const prevBtn = document.getElementById("prevMonthBtn");
+    if (prevBtn) {
+      prevBtn.addEventListener("click", () => {
+        currentDate.setMonth(currentDate.getMonth() - 1);
+        renderCalendar();
+        if (currentUser) attachRealtimeListeners();
+      });
+    }
+
+    const nextBtn = document.getElementById("nextMonthBtn");
+    if (nextBtn) {
+      nextBtn.addEventListener("click", () => {
+        currentDate.setMonth(currentDate.getMonth() + 1);
+        renderCalendar();
+        if (currentUser) attachRealtimeListeners();
+      });
+    }
+
+    const authSwitch = document.getElementById("authSwitchBtn");
+    const authTitle = document.getElementById("authCardTitle");
+    const authBtn = document.getElementById("authSubmitBtn");
+    const authOverlay = document.getElementById("authOverlay");
+    const userEmailDisplay = document.getElementById("userEmailDisplay");
+
+    if (authSwitch) {
+      authSwitch.addEventListener("click", () => {
+        isRegisterMode = !isRegisterMode;
+        if (authTitle) authTitle.textContent = isRegisterMode ? "Create Account" : "Welcome Back";
+        if (authBtn) authBtn.textContent = isRegisterMode ? "Sign Up" : "Log In";
+        authSwitch.innerHTML = isRegisterMode 
+          ? "Have an account? <span>Log In</span>" 
+          : "Don't have an account? <span>Sign Up</span>";
+      });
+    }
+
+    if (authBtn) {
+      authBtn.addEventListener("click", async () => {
+        const email = document.getElementById("authEmail")?.value?.trim();
+        const pass = document.getElementById("authPassword")?.value?.trim();
+        if (!email || !pass) return alert("Please enter both email and password.");
+
+        try {
+          if (isRegisterMode) {
+            await createUserWithEmailAndPassword(auth, email, pass);
+          } else {
+            await signInWithEmailAndPassword(auth, email, pass);
+          }
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+    }
+
+    const logoutBtn = document.getElementById("logoutBtn");
+    if (logoutBtn) {
+      logoutBtn.addEventListener("click", () => signOut(auth));
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      currentUser = user;
+      if (user) {
+        if (authOverlay) authOverlay.style.display = "none";
+        if (userEmailDisplay) userEmailDisplay.textContent = user.email;
+        attachRealtimeListeners();
+      } else {
+        if (authOverlay) authOverlay.style.display = "flex";
+        if (userEmailDisplay) userEmailDisplay.textContent = "Offline";
+      }
+    });
+
+    let unsubscribeSnap = null;
+    function attachRealtimeListeners() {
+      if (!currentUser) return;
+      renderCalendar();
+
+      if (unsubscribeSnap) unsubscribeSnap();
+
+      try {
+        const userEntriesRef = collection(db, "users", currentUser.uid, "entries");
+        unsubscribeSnap = onSnapshot(userEntriesRef, (snapshot) => {
+          const allEntries = [];
+          snapshot.forEach(d => allEntries.push({ id: d.id, ...d.data() }));
+
+          markCalendarEntries(allEntries);
+          renderCurrentDayLogs(allEntries);
+        });
+      } catch (err) {
+        console.error("Listener error:", err);
+      }
+    }
+
+    function renderCurrentDayLogs(allEntries) {
+      const logsContainer = document.getElementById("logsContainer");
+      if (!logsContainer) return;
+      const currentDayEntries = allEntries.filter(e => e.date === selectedDateStr);
+      logsContainer.innerHTML = "";
+
+      if (currentDayEntries.length === 0) {
+        logsContainer.innerHTML = `<div class="empty-state">No entries for this date.</div>`;
+        return;
+      }
+
+      currentDayEntries.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "log-item";
+        div.style.cursor = "pointer";
+
+        let attachmentsHtml = "";
+        if (item.files && item.files.length > 0) {
+          attachmentsHtml = `<div class="file-preview-list" style="margin-top: 4px;">` +
+            item.files.map(f => `
+              <div class="file-chip">
+                <a href="${f.data}" download="${f.name}" onclick="event.stopPropagation();">📎 ${f.name}</a>
+              </div>
+            `).join("") + `</div>`;
+        }
+
+        div.innerHTML = `
+          <div class="log-header">
+            <div class="log-title">${item.title}</div>
+            <button class="btn-delete-pill" onclick="event.stopPropagation(); window.deleteEntry('${item.id}')">✕</button>
+          </div>
+          ${attachmentsHtml}
+        `;
+
+        // Click to load entry content into input and notes editor
+        div.addEventListener("click", () => {
+          const titleInput = document.getElementById("taskName");
+          const notesInput = document.getElementById("taskNotes");
+          const viewHeading = document.getElementById("viewHeading");
+
+          if (titleInput) titleInput.value = item.title || "";
+          if (notesInput) notesInput.value = item.notes || "";
+          if (viewHeading) viewHeading.textContent = `Viewing: ${item.title} (${item.date})`;
+
+          pendingFiles = item.files ? [...item.files] : [];
+          renderFilePreviews();
+
+          document.querySelectorAll(".log-item").forEach(el => el.style.borderColor = "var(--panel-border)");
+          div.style.borderColor = "var(--accent)";
+        });
+
+        logsContainer.appendChild(div);
+      });
+    }
+
+    window.deleteEntry = async (docId) => {
+      if (!currentUser) return;
+      await deleteDoc(doc(db, "users", currentUser.uid, "entries", docId));
+    };
+
+    const saveBtn = document.getElementById("saveBtn");
+    if (saveBtn) {
+      saveBtn.addEventListener("click", async () => {
+        if (!currentUser) return alert("Please log in first.");
+
+        const titleInput = document.getElementById("taskName");
+        const notesInput = document.getElementById("taskNotes");
+        const title = titleInput?.value?.trim();
+        const notes = notesInput?.value?.trim() || "";
+
+        if (!title) return alert("Please enter a title.");
+
+        saveBtn.textContent = "Saving...";
+        saveBtn.disabled = true;
+
+        try {
+          await addDoc(collection(db, "users", currentUser.uid, "entries"), {
+            date: selectedDateStr,
+            title,
+            notes,
+            files: pendingFiles,
+            timestamp: Date.now()
+          });
+
+          if (titleInput) titleInput.value = "";
+          if (notesInput) notesInput.value = "";
+          pendingFiles = [];
+          renderFilePreviews();
+        } catch (err) {
+          alert("Error saving: " + err.message);
+        } finally {
+          saveBtn.textContent = "✓ Save Entry";
+          saveBtn.disabled = false;
+        }
+      });
+    }
+
+    const fileInput = document.getElementById("fileInput");
+    if (fileInput) {
+      fileInput.addEventListener("change", (e) => {
+        const files = Array.from(e.target.files || []);
+        files.forEach(file => {
+          if (file.size > 800 * 1024) {
+            alert(`"${file.name}" is over 800KB. Keep files small for free storage.`);
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            pendingFiles.push({
+              name: file.name,
+              data: event.target.result
+            });
+            renderFilePreviews();
+          };
+          reader.readAsDataURL(file);
+        });
+      });
+    }
+
+    function renderFilePreviews() {
+      const previewContainer = document.getElementById("previewContainer");
+      if (!previewContainer) return;
+      previewContainer.innerHTML = "";
+      pendingFiles.forEach((file, idx) => {
+        const span = document.createElement("div");
+        span.className = "file-chip";
+        span.innerHTML = `<span>📎 ${file.name}</span><span class="remove-btn" onclick="removePendingFile(${idx})">✕</span>`;
+        previewContainer.appendChild(span);
+      });
+    }
+
+    window.removePendingFile = (idx) => {
+      pendingFiles.splice(idx, 1);
+      renderFilePreviews();
+    };
   </script>
 </body>
 </html>
