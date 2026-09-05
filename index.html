@@ -65,7 +65,6 @@
       z-index: 1;
     }
 
-    /* Auth Overlay */
     #authOverlay {
       position: fixed;
       top: 0;
@@ -114,7 +113,6 @@
     }
     .auth-switch span { color: var(--accent); font-weight: 600; }
 
-    /* Top Header */
     header {
       display: flex;
       justify-content: space-between;
@@ -167,7 +165,6 @@
       font-weight: 600;
     }
 
-    /* Grid Layout */
     .dashboard-grid {
       display: grid;
       grid-template-columns: 390px 1fr;
@@ -272,7 +269,6 @@
       box-shadow: 0 0 0 3px var(--accent-glow);
     }
 
-    /* Calendar */
     .calendar-container {
       background: var(--input-bg);
       border: 1px solid var(--panel-border);
@@ -354,7 +350,6 @@
       background: var(--emerald);
     }
 
-    /* Attachments Dropzone */
     .file-dropzone {
       border: 1.5px dashed var(--panel-border);
       border-radius: 12px;
@@ -403,7 +398,6 @@
       font-weight: 700;
     }
 
-    /* Notes Canvas */
     .editor-wrapper {
       display: flex;
       flex-direction: column;
@@ -433,7 +427,6 @@
       box-shadow: 0 0 0 3px var(--accent-glow);
     }
 
-    /* Saved Entries */
     .left-logs-drawer {
       margin-top: 14px;
       border-top: 1px solid var(--panel-border);
@@ -481,8 +474,100 @@
       font-size: 0.8rem;
     }
   </style>
+</head>
+<body>
 
-  <!-- Firebase Script Modules -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+
+  <!-- Login Modal -->
+  <div id="authOverlay">
+    <div class="auth-card">
+      <h2 class="auth-title" id="authCardTitle">Welcome Back</h2>
+      <p class="auth-sub">Enter credentials to unlock your diary</p>
+      
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" id="authEmail" placeholder="your@email.com" autocomplete="username" />
+      </div>
+
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="authPassword" placeholder="••••••••" autocomplete="current-password" />
+      </div>
+
+      <button class="btn-save" style="width:100%; justify-content:center; margin-top:10px;" id="authSubmitBtn">Log In</button>
+      <div class="auth-switch" id="authSwitchBtn">Don't have an account? <span>Sign Up</span></div>
+    </div>
+  </div>
+
+  <div class="app-shell">
+    <header>
+      <div>
+        <h1 class="brand-title">Chronicle</h1>
+        <p class="brand-tagline">Track daily output, attach media, build an enduring archive.</p>
+      </div>
+      <div class="user-profile-bar">
+        <div class="user-email-tag" id="userEmailDisplay">Offline</div>
+        <button class="btn-logout" id="logoutBtn">Log Out</button>
+      </div>
+    </header>
+
+    <div class="dashboard-grid">
+      <div class="glass-panel">
+        <div class="panel-action-header">
+          <div class="panel-title">
+            <span class="status-dot"></span>
+            <span>Date & Task Details</span>
+          </div>
+        </div>
+
+        <div class="calendar-container">
+          <div class="calendar-header">
+            <button class="cal-nav-btn" id="prevMonthBtn">‹</button>
+            <span class="cal-month-title" id="monthYearLabel">Month Year</span>
+            <button class="cal-nav-btn" id="nextMonthBtn">›</button>
+          </div>
+          <div class="calendar-grid" id="calendarDays"></div>
+        </div>
+
+        <div class="form-group">
+          <label>Work Title / Accomplishment</label>
+          <input type="text" id="taskName" placeholder="e.g., Engine schematics, Core tests">
+        </div>
+
+        <div class="form-group">
+          <label>Attachments (PDFs / Photos)</label>
+          <label class="file-dropzone" for="fileInput">
+            <span>📎 Select or drag files</span>
+            <span class="sub-text">PNG, JPG, PDF supported</span>
+            <input type="file" id="fileInput" accept="image/*,application/pdf" multiple>
+          </label>
+          <div class="file-preview-list" id="previewContainer"></div>
+        </div>
+
+        <label style="margin-top: 6px;">Day's Saved Entries</label>
+        <div class="left-logs-drawer" id="logsContainer">
+          <div class="empty-state">No entries logged for this date.</div>
+        </div>
+      </div>
+
+      <div class="glass-panel">
+        <div class="panel-action-header">
+          <div class="panel-title">
+            <span id="viewHeading">Summary & Notes Canvas</span>
+          </div>
+          <button class="btn-save" id="saveBtn">✓ Save Entry</button>
+        </div>
+
+        <div class="editor-wrapper">
+          <textarea class="large-notes-editor" id="taskNotes" placeholder="Write your full daily test summary, detailed documentation, observations, or output logs here..."></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Defensive Module Script: Guarantees no null-reference crashes -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
     import { 
@@ -501,7 +586,6 @@
       onSnapshot 
     } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
-    // Your Config Keys:
     const firebaseConfig = {
       apiKey: "AIzaSyDh5zRZ84V97d7rYEZXaOes8HCTPjwZN4w",
       authDomain: "daily-diary-7c406.firebaseapp.com",
@@ -513,9 +597,14 @@
       measurementId: "G-RBERNEFGP7"
     };
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
+    let app, auth, db;
+    try {
+      app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      db = getFirestore(app);
+    } catch (e) {
+      console.error("Firebase init:", e);
+    }
 
     let currentUser = null;
     let isRegisterMode = false;
@@ -523,26 +612,34 @@
     let currentDate = new Date();
     let pendingFiles = [];
 
-    // --- Authentication ---
+    // Safe Event Binder
+    const bindEvent = (id, event, handler) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener(event, handler);
+    };
+
+    // Auth Elements
     const authOverlay = document.getElementById("authOverlay");
-    const authBtn = document.getElementById("authSubmitBtn");
-    const authEmail = document.getElementById("authEmail");
-    const authPass = document.getElementById("authPassword");
-    const authSwitch = document.getElementById("authSwitchBtn");
     const authTitle = document.getElementById("authCardTitle");
+    const authBtn = document.getElementById("authSubmitBtn");
+    const authSwitch = document.getElementById("authSwitchBtn");
     const userEmailDisplay = document.getElementById("userEmailDisplay");
 
-    authSwitch.addEventListener("click", () => {
+    bindEvent("authSwitchBtn", "click", () => {
       isRegisterMode = !isRegisterMode;
-      authTitle.textContent = isRegisterMode ? "Create Account" : "Welcome Back";
-      authBtn.textContent = isRegisterMode ? "Sign Up" : "Log In";
-      authSwitch.innerHTML = isRegisterMode ? "Have an account? <span>Log In</span>" : "Don't have an account? <span>Sign Up</span>";
+      if (authTitle) authTitle.textContent = isRegisterMode ? "Create Account" : "Welcome Back";
+      if (authBtn) authBtn.textContent = isRegisterMode ? "Sign Up" : "Log In";
+      if (authSwitch) {
+        authSwitch.innerHTML = isRegisterMode 
+          ? "Have an account? <span>Log In</span>" 
+          : "Don't have an account? <span>Sign Up</span>";
+      }
     });
 
-    authBtn.addEventListener("click", async () => {
-      const email = authEmail.value.trim();
-      const pass = authPass.value.trim();
-      if (!email || !pass) return alert("Please fill in email and password.");
+    bindEvent("authSubmitBtn", "click", async () => {
+      const email = document.getElementById("authEmail")?.value?.trim();
+      const pass = document.getElementById("authPassword")?.value?.trim();
+      if (!email || !pass) return alert("Please enter both email and password.");
 
       try {
         if (isRegisterMode) {
@@ -555,39 +652,50 @@
       }
     });
 
-    document.getElementById("logoutBtn").addEventListener("click", () => signOut(auth));
-
-    onAuthStateChanged(auth, (user) => {
-      currentUser = user;
-      if (user) {
-        authOverlay.style.display = "none";
-        userEmailDisplay.textContent = user.email;
-        attachRealtimeListeners();
-      } else {
-        authOverlay.style.display = "flex";
-      }
+    bindEvent("logoutBtn", "click", () => {
+      if (auth) signOut(auth);
     });
 
-    // --- Real-time Sync with Firestore ---
+    if (auth) {
+      onAuthStateChanged(auth, (user) => {
+        currentUser = user;
+        if (user) {
+          if (authOverlay) authOverlay.style.display = "none";
+          if (userEmailDisplay) userEmailDisplay.textContent = user.email;
+          attachRealtimeListeners();
+        } else {
+          if (authOverlay) authOverlay.style.display = "flex";
+          if (userEmailDisplay) userEmailDisplay.textContent = "Offline";
+        }
+      });
+    }
+
     let unsubscribeSnap = null;
     function attachRealtimeListeners() {
-      if (!currentUser) return;
+      if (!currentUser || !db) return;
       renderCalendar();
 
       if (unsubscribeSnap) unsubscribeSnap();
 
-      const userEntriesRef = collection(db, "users", currentUser.uid, "entries");
-      unsubscribeSnap = onSnapshot(userEntriesRef, (snapshot) => {
-        const allEntries = [];
-        snapshot.forEach(d => allEntries.push({ id: d.id, ...d.data() }));
+      try {
+        const userEntriesRef = collection(db, "users", currentUser.uid, "entries");
+        unsubscribeSnap = onSnapshot(userEntriesRef, (snapshot) => {
+          const allEntries = [];
+          snapshot.forEach(d => allEntries.push({ id: d.id, ...d.data() }));
 
-        markCalendarEntries(allEntries);
-        renderCurrentDayLogs(allEntries);
-      });
+          markCalendarEntries(allEntries);
+          renderCurrentDayLogs(allEntries);
+        }, (err) => {
+          console.warn("Firestore snapshot:", err);
+        });
+      } catch (err) {
+        console.error("Listener error:", err);
+      }
     }
 
     function renderCurrentDayLogs(allEntries) {
       const logsContainer = document.getElementById("logsContainer");
+      if (!logsContainer) return;
       const currentDayEntries = allEntries.filter(e => e.date === selectedDateStr);
       logsContainer.innerHTML = "";
 
@@ -622,21 +730,25 @@
     }
 
     window.deleteEntry = async (docId) => {
-      if (!currentUser) return;
+      if (!currentUser || !db) return;
       await deleteDoc(doc(db, "users", currentUser.uid, "entries", docId));
     };
 
-    // --- Save Entry to Firestore ---
-    document.getElementById("saveBtn").addEventListener("click", async () => {
+    bindEvent("saveBtn", "click", async () => {
       if (!currentUser) return alert("Please log in first.");
 
-      const title = document.getElementById("taskName").value.trim();
-      const notes = document.getElementById("taskNotes").value.trim();
+      const titleInput = document.getElementById("taskName");
+      const notesInput = document.getElementById("taskNotes");
+      const title = titleInput?.value?.trim();
+      const notes = notesInput?.value?.trim() || "";
+
       if (!title) return alert("Please enter a title.");
 
       const saveBtn = document.getElementById("saveBtn");
-      saveBtn.textContent = "Saving...";
-      saveBtn.disabled = true;
+      if (saveBtn) {
+        saveBtn.textContent = "Saving...";
+        saveBtn.disabled = true;
+      }
 
       try {
         await addDoc(collection(db, "users", currentUser.uid, "entries"), {
@@ -647,27 +759,25 @@
           timestamp: Date.now()
         });
 
-        document.getElementById("taskName").value = "";
-        document.getElementById("taskNotes").value = "";
+        if (titleInput) titleInput.value = "";
+        if (notesInput) notesInput.value = "";
         pendingFiles = [];
         renderFilePreviews();
       } catch (err) {
         alert("Error saving: " + err.message);
       } finally {
-        saveBtn.textContent = "✓ Save Entry";
-        saveBtn.disabled = false;
+        if (saveBtn) {
+          saveBtn.textContent = "✓ Save Entry";
+          saveBtn.disabled = false;
+        }
       }
     });
 
-    // --- File Handling ---
-    const fileInput = document.getElementById("fileInput");
-    const previewContainer = document.getElementById("previewContainer");
-
-    fileInput.addEventListener("change", (e) => {
-      const files = Array.from(e.target.files);
+    bindEvent("fileInput", "change", (e) => {
+      const files = Array.from(e.target.files || []);
       files.forEach(file => {
         if (file.size > 800 * 1024) {
-          alert(`"${file.name}" is over 800KB. Keep files small so they stay free.`);
+          alert(`"${file.name}" is over 800KB. Keep files small for free storage.`);
           return;
         }
         const reader = new FileReader();
@@ -683,6 +793,8 @@
     });
 
     function renderFilePreviews() {
+      const previewContainer = document.getElementById("previewContainer");
+      if (!previewContainer) return;
       previewContainer.innerHTML = "";
       pendingFiles.forEach((file, idx) => {
         const span = document.createElement("div");
@@ -697,14 +809,15 @@
       renderFilePreviews();
     };
 
-    // --- Calendar Logic ---
     function renderCalendar() {
       const year = currentDate.getFullYear();
       const month = currentDate.getMonth();
       const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-      document.getElementById("monthYearLabel").textContent = `${monthNames[month]} ${year}`;
+      const label = document.getElementById("monthYearLabel");
+      if (label) label.textContent = `${monthNames[month]} ${year}`;
 
       const grid = document.getElementById("calendarDays");
+      if (!grid) return;
       grid.innerHTML = "";
 
       ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].forEach(d => {
@@ -731,7 +844,8 @@
 
         cell.addEventListener("click", () => {
           selectedDateStr = dateKey;
-          document.getElementById("viewHeading").textContent = `Summary & Notes (${selectedDateStr})`;
+          const viewHeading = document.getElementById("viewHeading");
+          if (viewHeading) viewHeading.textContent = `Summary & Notes (${selectedDateStr})`;
           renderCalendar();
           if (currentUser) attachRealtimeListeners();
         });
@@ -751,13 +865,13 @@
       });
     }
 
-    document.getElementById("prevMonthBtn").addEventListener("click", () => {
+    bindEvent("prevMonthBtn", "click", () => {
       currentDate.setMonth(currentDate.getMonth() - 1);
       renderCalendar();
       if (currentUser) attachRealtimeListeners();
     });
 
-    document.getElementById("nextMonthBtn").addEventListener("click", () => {
+    bindEvent("nextMonthBtn", "click", () => {
       currentDate.setMonth(currentDate.getMonth() + 1);
       renderCalendar();
       if (currentUser) attachRealtimeListeners();
